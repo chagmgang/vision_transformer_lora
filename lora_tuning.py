@@ -1,3 +1,4 @@
+from model.lora_utils import mark_only_lora_as_trainable
 from model.lora_model import LoRAVisionTransformer
 from utils.build_optim import build_optimizer
 import torch
@@ -16,19 +17,14 @@ def main():
     model = LoRAVisionTransformer(
         img_size=img_size,
         patch_size=patch_size,
+        with_cp=True,
     )
     model = model.to(device)
-    # state_dict = torch.load('model-vit-b-checkpoint-1599.pth', map_location='cpu')
+    state_dict = torch.load('model-vit-b-checkpoint-1599.pth', map_location='cpu')
     # load state dict
-    # print(model.load_state_dict(state_dict, strict=False))
+    print(model.load_state_dict(state_dict, strict=False))
     # not freeze only lora and classifier
-    for name, param in model.named_parameters():
-        if 'lora' in name:
-            param.requires_grad = True
-        elif 'classifier' in name:
-            param.requires_grad = True
-        else:
-            param.requires_grad = False
+    mark_only_lora_as_trainable(model)
 
     # build optimizer
     optimizer = build_optimizer(

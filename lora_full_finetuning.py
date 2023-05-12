@@ -16,11 +16,14 @@ def main():
     model = LoRAVisionTransformer(
         img_size=img_size,
         patch_size=patch_size,
+        with_cp=True,
     )
     model = model.to(device)
-    # state_dict = torch.load('model-vit-b-checkpoint-1599.pth', map_location='cpu')
+    state_dict = torch.load('model-vit-b-checkpoint-1599.pth', map_location='cpu')
     # load state dict
-    # print(model.load_state_dict(state_dict, strict=False))
+    print(model.load_state_dict(state_dict, strict=False))
+    for name, param in model.named_parameters():
+        print(name, param.requires_grad)
 
     # build optimizer
     optimizer = build_optimizer(

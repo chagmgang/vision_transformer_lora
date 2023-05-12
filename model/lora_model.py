@@ -1,7 +1,9 @@
 import torch
 import torch.nn as nn
+from .lora_layers import Linear
 from .base_model import VisionTransformer, Block
 from functools import partial
+
 
 class LoRAAttention(nn.Module):
 
@@ -20,31 +22,17 @@ class LoRAAttention(nn.Module):
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.proj = nn.Linear(dim, dim)
-        self.q_lora_a = nn.Linear(head_dim, rank, bias=False)
-        self.q_lora_b = nn.Linear(rank, head_dim, bias=False)
-        self.v_lora_a = nn.Linear(head_dim, rank, bias=False)
-        self.v_lora_b = nn.Linear(rank, head_dim, bias=False)
 
-        nn.init.normal_(self.q_lora_a.weight, std=0.02)
-        self.q_lora_b.weight.data.zero_()
-        nn.init.normal_(self.v_lora_a.weight, std=0.02)
-        self.v_lora_b.weight.data.zero_()
-
+        self.lora_query = Linear(head_dim, head_dim, r=rank, bias=False)
+        self.lora_value = Linear(head_dim, head_dim, r=rank, bias=False)
+        
     def forward(self, x):
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads,
                                   C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]
-        q_delta = self.adapter_forward(
-            q,
-            self.q_lora_a.weight,
-            self.q_lora_b.weight,
-        )
-        v_delta = self.adapter_forward(
-            v,
-            self.v_lora_a.weight,
-            self.v_lora_b.weight,
-        )
+        q_delta = self.lora_query(q)
+        v_delta = self.lora_value(v)
         q = q.contiguous() + q_delta
         v = v.contiguous() + v_delta
 
@@ -54,11 +42,6 @@ class LoRAAttention(nn.Module):
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         return x
-
-    def adapter_forward(self, x, weight_1, weight_2, g_weight=None):
-        result = torch.matmul(x, weight_1.type_as(x).T)
-        final = torch.matmul(result, weight_2.type_as(x).T)
-        return final
 
 class LoRABlock(Block):
 
